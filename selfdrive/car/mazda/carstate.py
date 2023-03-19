@@ -108,9 +108,9 @@ class CarState(CarStateBase):
     # ti
     # On if no driver torque the last 5 seconds
     if self.CP.carFingerprint not in (CAR.CX5_2022, CAR.CX9_2021):
-      ret.steerWarning = cp.vl["STEER_RATE"]["HANDS_OFF_5_SECONDS"] == 1
+      ret.steerFaultTemporary = cp.vl["STEER_RATE"]["HANDS_OFF_5_SECONDS"] == 1
     else:
-      ret.steerWarning = False
+      ret.steerFaultTemporary = False
 
     if ret.cruiseState.enabled:
       if not self.lkas_allowed_speed and self.acc_active_last:
