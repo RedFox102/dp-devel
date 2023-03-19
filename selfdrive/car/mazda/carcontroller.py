@@ -23,7 +23,7 @@ class CarController:
     can_sends = []
 
     apply_steer = 0
-    ti_apply_steer = 0 ti_new_steer = 0
+    ti_apply_steer = 0
 
     if CC.latActive:
       # ti
