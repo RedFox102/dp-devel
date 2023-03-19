@@ -110,7 +110,7 @@ class CarInterface(CarInterfaceBase):
 
   # returns a car.CarState
   def _update(self, c):
-    ret = self.CS.update(self.cp, self.cp_cam)
+    ret = self.CS.update(self.cp, self.cp_cam, self.cp_body)
     if self.CP.enableTorqueInterceptor and not TI.enabled:
       TI.enabled = True
       self.cp_body = self.CS.get_body_can_parser(self.CP)
