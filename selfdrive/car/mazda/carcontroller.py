@@ -23,11 +23,11 @@ class CarController:
     can_sends = []
 
     apply_steer = 0
-    ti_apply_steer = 0
+    ti_apply_steer = 0 ti_new_steer = 0
 
     if CC.latActive:
       # ti
-      if self.dp_mazda_ti and CS.CP.enableTorqueInterceptor:
+      if CS.CP.enableTorqueInterceptor:
         if CS.ti_lkas_allowed:
           ti_new_steer = int(round(CC.actuators.steer * TiSteerLimits.TI_STEER_MAX))
           ti_apply_steer = (ti_new_steer, self.ti_apply_steer_last,
