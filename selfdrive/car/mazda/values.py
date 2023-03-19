@@ -64,12 +64,11 @@ CAR_INFO: Dict[str, Union[MazdaCarInfo, List[MazdaCarInfo]]] = {
 
 class LKAS_LIMITS:
   STEER_THRESHOLD = 15
-  if not Params().get_bool('dp_mazda_ti'):
-    DISABLE_SPEED = 45       # kph
-    ENABLE_SPEED = 52        # kph
-  else:
-    DISABLE_SPEED = 0       # kph
-    ENABLE_SPEED = 0        # kph
+  DISABLE_SPEED = 0    # kph
+  ENABLE_SPEED = 0     # kph
+  TI_STEER_THRESHOLD = 15
+  TI_DISABLE_SPEED = 0    # kph
+  TI_ENABLE_SPEED = 0     # kph
 
 
 class Buttons:
