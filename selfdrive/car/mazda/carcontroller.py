@@ -27,12 +27,12 @@ class CarController:
       # calculate steer and also set limits due to driver torque
       if CS.CP.enableTorqueInterceptor:
         if CS.ti_lkas_allowed:
-          ti_new_steer = int(round(CC.actuators.steer * TiSteerLimits.TI_STEER_MAX))
+          ti_new_steer = int(round(CC.actuators.steer * CarControllerParams.TI_STEER_MAX))
           ti_apply_steer = apply_ti_steer_torque_limits(ti_new_steer, self.ti_apply_steer_last,
                                                     CS.out.steeringTorque, CarControllerParams)
 
       new_steer = int(round(CC.actuators.steer * CarControllerParams.STEER_MAX))
-      apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last,
+      apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last,
                                                     CS.out.steeringTorque, CarControllerParams)
 
       self.steer_rate_limited = (new_steer != apply_steer) and (ti_new_steer != ti_apply_steer)
