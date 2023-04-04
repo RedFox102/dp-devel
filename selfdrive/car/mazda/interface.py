@@ -13,6 +13,7 @@ EventName = car.CarEvent.EventName
 class CarInterface(CarInterfaceBase):
   def __init__(self, CP, CarController, CarState):
     super().__init__(CP, CarController, CarState)
+    self.dp_mazda_ti = Params().get_bool('dp_mazda_ti')
 
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long):
@@ -20,11 +21,6 @@ class CarInterface(CarInterfaceBase):
     ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.mazda)]
     ret.radarUnavailable = True
     ret.dashcamOnly = candidate not in (CAR.CX5_2022, CAR.CX9_2021) and not Params().get_bool('dp_mazda_dashcam_bypass')
-
-    #ret.enableTorqueInterceptor = 0x24A in fingerprint[0]
-    #if ret.enableTorqueInterceptor:
-    #  print("Recieving torque interceptor signal.")
-
     ret.steerActuatorDelay = 0.1
     ret.steerLimitTimer = 0.8
     tire_stiffness_factor = 0.70   # not optimized yet
@@ -49,7 +45,7 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 15.5
 
     if candidate not in (CAR.CX5_2022, ):
-      ret.minSteerSpeed = LKAS_LIMITS.DISABLE_SPEED * CV.KPH_TO_MSS
+      ret.minSteerSpeed = LKAS_LIMITS.DISABLE_SPEED * CV.KPH_TO_MS
 
     CarInterfaceBase.dp_lat_tune_collection(candidate, ret.latTuneCollection)
     CarInterfaceBase.configure_dp_tune(ret.lateralTuning, ret.latTuneCollection)
@@ -65,11 +61,13 @@ class CarInterface(CarInterfaceBase):
 
   # returns a car.CarState
   def _update(self, c):
-    ret = self.CS.update(self.cp, self.cp_cam)
+    
     if self.CP.enableTorqueInterceptor and not TI.enabled:
       TI.enabled = True
       self.cp_body = self.CS.get_body_can_parser(self.CP)
       self.can_parsers = [self.cp, self.cp_cam, self.cp_adas, self.cp_body, self.cp_loopback]
+    
+    ret = self.CS.update(self.cp, self.cp_cam, self.cp_body)
 
     # events
     events = self.create_common_events(ret)

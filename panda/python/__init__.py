@@ -185,7 +185,10 @@ class Panda:
   CAN_PACKET_VERSION = 4
   HEALTH_PACKET_VERSION = 11
   CAN_HEALTH_PACKET_VERSION = 4
-  HEALTH_STRUCT = struct.Struct("<IIIIIIIIIBBBBBBHBBBHfBBB")
+  # dp - 2 extra "B" at the end:
+  # "usb_power_mode": a[23],
+  # "torque_interceptor_detected": a[24],
+  HEALTH_STRUCT = struct.Struct("<IIIIIIIIIBBBBBBHBBBHfBBBB")
   CAN_HEALTH_STRUCT = struct.Struct("<BIBBBBBBBBIIIIIIIHHBBB")
 
   F2_DEVICES = (HW_TYPE_PEDAL, )
@@ -558,7 +561,8 @@ class Panda:
       "interrupt_load": a[20],
       "fan_power": a[21],
       "safety_rx_checks_invalid": a[22],
-      "torque_interceptor_detected": a[23],
+      "usb_power_mode": a[23],
+      "torque_interceptor_detected": a[24],
     }
 
   @ensure_can_health_packet_version

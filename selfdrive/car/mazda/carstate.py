@@ -17,7 +17,8 @@ class CarState(CarStateBase):
     self.low_speed_alert = False
     self.lkas_allowed_speed = False
     self.lkas_disabled = False
-
+    
+    # ti - op
     self.ti_ramp_down = False
     self.ti_version = 1
     self.ti_state = TI_STATE.RUN
@@ -84,7 +85,10 @@ class CarState(CarStateBase):
     ret.gasPressed = ret.gas > 0
 
     # Either due to low speed or hands off
-    lkas_blocked = cp.vl["STEER_RATE"]["LKAS_BLOCK"] == 1
+    if not self.CP.enableTorqueInterceptor:
+      lkas_blocked = cp.vl["STEER_RATE"]["LKAS_BLOCK"] == 1
+    else:  
+      lkas_blocked = False
 
     if self.CP.minSteerSpeed > 0:
       # LKAS is enabled at 52kph going up and disabled at 45kph going down
@@ -117,7 +121,11 @@ class CarState(CarStateBase):
     self.lkas_disabled = cp_cam.vl["CAM_LANEINFO"]["LANE_LINES"] == 0
     self.cam_lkas = cp_cam.vl["CAM_LKAS"]
     self.cam_laneinfo = cp_cam.vl["CAM_LANEINFO"]
-    ret.steerFaultPermanent = cp_cam.vl["CAM_LKAS"]["ERR_BIT_1"] == 1
+    
+    if not self.CP.enableTorqueInterceptor:
+      ret.steerFaultPermanent = cp_cam.vl["CAM_LKAS"]["ERR_BIT_1"] == 1
+    else: 
+      ret.steerFaultPermanent = False
 
     return ret
 
