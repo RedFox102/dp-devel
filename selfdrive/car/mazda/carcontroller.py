@@ -2,7 +2,9 @@ from cereal import car
 from opendbc.can.packer import CANPacker
 from selfdrive.car import apply_driver_steer_torque_limits
 from selfdrive.car.mazda import mazdacan
-from selfdrive.car.mazda.values import CarControllerParams, Buttons
+from selfdrive.car.mazda.values import CarControllerParams, TiSteerLimits, Buttons
+from common.params import Params
+
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
@@ -15,6 +17,8 @@ class CarController:
     self.packer = CANPacker(dbc_name)
     self.brake_counter = 0
     self.frame = 0
+    # dp - ti
+    self.dp_mazda_ti = Params().get_bool('dp_mazda_ti')
 
   def update(self, CC, CS, now_nanos):
     can_sends = []
@@ -24,13 +28,13 @@ class CarController:
     self.steer_rate_limited = False
 
     if CC.latActive:
-      # calculate steer and also set limits due to driver torque
+      # ti - calculate steer and also set limits due to driver torque
       if CS.CP.enableTorqueInterceptor:
         if CS.ti_lkas_allowed:
-          ti_new_steer = int(round(CC.actuators.steer * CarControllerParams.TI_STEER_MAX))
-          ti_apply_steer = apply_ti_steer_torque_limits(ti_new_steer, self.ti_apply_steer_last,
-                                                    CS.out.steeringTorque, CarControllerParams)
-
+          ti_new_steer = int(round(CC.actuators.steer * TiSteerLimits.STEER_MAX))
+          ti_apply_steer = apply_driver_steer_torque_limits(ti_new_steer, self.ti_apply_steer_last,
+                                                    CS.out.steeringTorque, TiSteerLimits)
+      # LKAS - calculate steer and also set limits due to driver torque
       new_steer = int(round(CC.actuators.steer * CarControllerParams.STEER_MAX))
       apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last,
                                                     CS.out.steeringTorque, CarControllerParams)
@@ -68,9 +72,11 @@ class CarController:
 
     # send steering command
 
+    # dp - ti 
     #The ti cannot be detected unless OP sends a can message to it becasue the ti only transmits when it
     #sees the signature key in the designated address range.
-    can_sends.append(mazdacan.create_ti_steering_control(self.packer, self.CP.carFingerprint,
+    if self.dp_mazda_ti:
+      can_sends.append(mazdacan.create_ti_steering_control(self.packer, self.CP.carFingerprint,
                                                       self.frame, ti_apply_steer))
     # always send to the stock system
     can_sends.append(mazdacan.create_steering_control(self.packer, self.CP.carFingerprint,
