@@ -212,6 +212,13 @@ def set_obd_multiplexing(params: Params, obd_multiplexing: bool):
     params.put_bool("ObdMultiplexingEnabled", obd_multiplexing)
     params.get_bool("ObdMultiplexingChanged", block=True)
     cloudlog.warning("OBD multiplexing set successfully")
+  
+  elif params.get_bool('dp_mazda_ti'):
+    print("Setting OBD multiplexing to True")
+    params.remove("ObdMultiplexingChanged")
+    params.put_bool("ObdMultiplexingEnabled", True)
+    params.get_bool("ObdMultiplexingChanged", block=True) # wait here until board safety setter thread switches. Could take up to 1-2 seconds.
+    print("OBD multiplexing set successfully")
 
 
 def get_fw_versions_ordered(logcan, sendcan, ecu_rx_addrs, timeout=0.1, num_pandas=1, debug=False, progress=False):
