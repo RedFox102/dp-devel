@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from cereal import car
 from common.conversions import Conversions as CV
-from selfdrive.car.mazda.values import CAR, LKAS_LIMITS
+from selfdrive.car.mazda.values import CAR, LKAS_LIMITS, GEN1
 from selfdrive.car import STD_CARGO_KG, scale_tire_stiffness, get_safety_config
+from selfdrive.global_ti import TI
 from selfdrive.car.interfaces import CarInterfaceBase
 from common.params import Params
 
@@ -10,10 +11,11 @@ ButtonType = car.CarState.ButtonEvent.Type
 EventName = car.CarEvent.EventName
 
 class CarInterface(CarInterfaceBase):
-
+  
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs):
     ret.carName = "mazda"
+
     ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.mazda)]
     ret.radarUnavailable = True
 
@@ -59,7 +61,13 @@ class CarInterface(CarInterfaceBase):
 
   # returns a car.CarState
   def _update(self, c):
-    ret = self.CS.update(self.cp, self.cp_cam)
+    if self.CP.enableTorqueInterceptor and not TI.enabled:
+      TI.enabled = True
+      self.cp_body = self.CS.get_body_can_parser(self.CP)
+      self.can_parsers = [self.cp, self.cp_cam, self.cp_adas, self.cp_body, self.cp_loopback]
+
+    ret = self.CS.update(self.cp, self.cp_cam, self.cp_body)
+    ret.cruiseState.enabled, ret.cruiseState.available = self.dp_atl_mode(ret)
 
     # events
     events = self.create_common_events(ret)
@@ -68,6 +76,9 @@ class CarInterface(CarInterfaceBase):
       events.add(EventName.lkasDisabled)
     elif self.dragonconf.dpMazdaSteerAlert and self.CS.low_speed_alert:
       events.add(EventName.belowSteerSpeed)
+      
+    if not self.CS.acc_active_last and not self.CS.ti_lkas_allowed:
+      events.add(EventName.steerTempUnavailable)  
 
     ret.events = events.to_msg()
 

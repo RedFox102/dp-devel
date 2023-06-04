@@ -13,6 +13,8 @@ from system.swaglog import cloudlog
 import cereal.messaging as messaging
 from selfdrive.car import gen_empty_fingerprint
 
+from selfdrive import global_ti
+
 import threading
 import requests
 import time
@@ -188,6 +190,9 @@ def fingerprint(logcan, sendcan, num_pandas):
 
   cloudlog.event("fingerprinted", car_fingerprint=car_fingerprint, source=source, fuzzy=not exact_match, cached=cached,
                  fw_count=len(car_fw), ecu_responses=list(ecu_rx_addrs), vin_rx_addr=vin_rx_addr, error=True)
+
+  global_ti.saved_candidate = car_fingerprint
+  global_ti.saved_finger = finger               
   return car_fingerprint, finger, vin, car_fw, source, exact_match
 
 #dp
@@ -246,7 +251,16 @@ def get_car(logcan, sendcan, experimental_long_allowed, num_pandas=1):
     CP.carFw = car_fw
     CP.fingerprintSource = source
     CP.fuzzyFingerprint = not exact_match
+    
+    global_ti.saved_CarInterface = CarInterface
 
     return CarInterface(CP, CarController, CarState), CP
   except KeyError:
     return None, None
+
+def get_ti():
+  print("get_ti, entering get_params")
+  CarInterface = global_ti.saved_CarInterface
+  car_params = CarInterface.get_params(global_ti.saved_candidate, global_ti.saved_finger, car_fw=None, experimental_long=False)
+
+  return car_params    
