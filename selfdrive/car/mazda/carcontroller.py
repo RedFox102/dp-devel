@@ -18,7 +18,8 @@ class CarController:
     self.brake_counter = 0
     self.frame = 0
     # dp - ti
-    self.dp_mazda_ti = Params().get_bool('dp_mazda_ti')
+    # Forced to true for now. Will use param when merged.
+    self.dp_mazda_ti = True
 
   def update(self, CC, CS, now_nanos):
     can_sends = []
