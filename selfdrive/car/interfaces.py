@@ -8,13 +8,14 @@ from cereal import car
 from common.basedir import BASEDIR
 from common.conversions import Conversions as CV
 from common.kalman.simple_kalman import KF1D
-from common.numpy_fast import clip
+from common.numpy_fast import clip, interp
 from common.realtime import DT_CTRL
 from selfdrive.car import apply_hysteresis, gen_empty_fingerprint, scale_rot_inertia, scale_tire_stiffness
-from selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, get_friction
+from selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, apply_center_deadzone
 from selfdrive.controls.lib.events import Events
 from selfdrive.controls.lib.vehicle_model import VehicleModel
 from common.params import Params
+from selfdrive.car.lat_controller_helper import configure_pid_tune, configure_lqr_tune
 
 ButtonType = car.CarState.ButtonEvent.Type
 GearShifter = car.CarState.GearShifter
@@ -65,7 +66,6 @@ class CarInterfaceBase(ABC):
     self.frame = 0
     self.steering_unpressed = 0
     self.low_speed_alert = False
-    self.no_steer_warning = False
     self.silent_steer_warning = True
     self.v_ego_cluster_seen = False
 
@@ -85,7 +85,7 @@ class CarInterfaceBase(ABC):
     if CarController is not None:
       self.CC = CarController(self.cp.dbc_name, CP, self.VM)
 
-      # dp
+    # dp
     self.dp_last_cruise_actual_enabled = False
     self.dragonconf = None
 
@@ -137,12 +137,15 @@ class CarInterfaceBase(ABC):
     return self.get_steer_feedforward_default
 
   @staticmethod
-  def torque_from_lateral_accel_linear(lateral_accel_value: float, torque_params: car.CarParams.LateralTorqueTuning,
-                                       lateral_accel_error: float, lateral_accel_deadzone: float,
-                                       steering_angle: float, vego: float, friction_compensation: bool) -> float:
+  def torque_from_lateral_accel_linear(lateral_accel_value, torque_params, lateral_accel_error, lateral_accel_deadzone, friction_compensation):
     # The default is a linear relationship between torque and lateral acceleration (accounting for road roll and steering friction)
-    friction = get_friction(lateral_accel_error, lateral_accel_deadzone, FRICTION_THRESHOLD, torque_params, friction_compensation)
-    return (lateral_accel_value / float(torque_params.latAccelFactor)) + friction
+    friction_interp = interp(
+      apply_center_deadzone(lateral_accel_error, lateral_accel_deadzone),
+      [-FRICTION_THRESHOLD, FRICTION_THRESHOLD],
+      [-torque_params.friction, torque_params.friction]
+    )
+    friction = friction_interp if friction_compensation else 0.0
+    return (lateral_accel_value / torque_params.latAccelFactor) + friction
 
   def torque_from_lateral_accel(self) -> TorqueFromLateralAccelCallbackType:
     return self.torque_from_lateral_accel_linear
@@ -183,7 +186,8 @@ class CarInterfaceBase(ABC):
     ret.longitudinalActuatorDelayUpperBound = 0.15
     ret.steerLimitTimer = 1.0
     # Mazda TI
-    ret.enableTorqueInterceptor = Params().get_bool('dp_mazda_ti')
+    ret.enableTorqueInterceptor = False
+   
     return ret
 
   @staticmethod
@@ -201,12 +205,45 @@ class CarInterfaceBase(ABC):
     tune.torque.steeringAngleDeadzoneDeg = steering_angle_deadzone_deg
 
   @staticmethod
-  def configure_dp_tune(candidate, tune, steering_angle_deadzone_deg=0.0, use_steering_angle=True):
-    params = Params()
-    if params.get_bool('dp_lateral_lqr'):
-      CarInterfaceBase.configure_lqr_tune(tune)
-    elif params.get_bool('dp_lateral_torque'):
-      CarInterfaceBase.configure_torque_tune(candidate, tune, steering_angle_deadzone_deg, use_steering_angle)
+  def configure_dp_tune(stock, collection):
+    try:
+      dp_lateral_tune = int(Params().get("dp_lateral_tune").decode('utf-8'))
+    except:
+      dp_lateral_tune = 0
+
+    stock_tune = 0
+    if stock.which() == 'pid':
+      stock_tune = 1
+      collection.pid = stock.pid
+    elif stock.which() == 'lqr':
+      stock_tune = 2
+      collection.lqr = stock.lqr
+    elif stock.which() == 'torque':
+      stock_tune = 3
+      collection.torque = stock.torque
+    elif stock.which() == 'indi':
+      stock_tune = 4
+
+    if dp_lateral_tune > 0 and dp_lateral_tune != stock_tune:
+      if dp_lateral_tune == 1 and collection.pid is not None:
+        stock.pid = collection.pid
+      elif dp_lateral_tune == 2 and collection.lqr is not None:
+        stock.lqr = collection.lqr
+      elif dp_lateral_tune == 3 and collection.torque is not None:
+        stock.torque = collection.torque
+
+  @staticmethod
+  def dp_lat_tune_collection(candidate, collection, steering_angle_deadzone_deg=0.0, use_steering_angle=True):
+    for i in range(1, 4):
+      # pid - car specific
+      if i == 1:
+        configure_pid_tune(candidate, collection)
+      # lqr - all uses RAV4 one
+      elif i == 2:
+        configure_lqr_tune(candidate, collection)
+      # torque - car specific as per lookup table
+      elif i == 3:
+        CarInterfaceBase.configure_torque_tune(candidate, collection, steering_angle_deadzone_deg, use_steering_angle)
 
   @abstractmethod
   def _update(self, c: car.CarControl) -> car.CarState:
@@ -258,12 +295,12 @@ class CarInterfaceBase(ABC):
       events.add(EventName.doorOpen)
     if cs_out.seatbeltUnlatched:
       events.add(EventName.seatbeltNotLatched)
-    if self.dragonconf.dpAtl != 1 and cs_out.gearShifter != GearShifter.drive and (extra_gears is None or
+    if cs_out.gearShifter != GearShifter.drive and (extra_gears is None or
        cs_out.gearShifter not in extra_gears):
       events.add(EventName.wrongGear)
     if cs_out.gearShifter == GearShifter.reverse:
       events.add(EventName.reverseGear)
-    if self.dragonconf.dpAtl == 0 and not cs_out.cruiseState.available:
+    if not cs_out.cruiseState.available:
       events.add(EventName.wrongCarMode)
     if cs_out.espDisabled:
       events.add(EventName.espDisabled)
@@ -273,13 +310,13 @@ class CarInterfaceBase(ABC):
       events.add(EventName.stockAeb)
     if self.dragonconf.dpSpeedCheck and cs_out.vEgo > MAX_CTRL_SPEED:
       events.add(EventName.speedTooHigh)
-    if self.dragonconf.dpAtl != 1 and cs_out.cruiseState.nonAdaptive:
+    if cs_out.cruiseState.nonAdaptive:
       events.add(EventName.wrongCruiseMode)
-    if self.dragonconf.dpAtl != 1 and cs_out.brakeHoldActive and self.CP.openpilotLongitudinalControl:
+    if cs_out.brakeHoldActive and self.CP.openpilotLongitudinalControl:
       events.add(EventName.brakeHold)
-    if self.dragonconf.dpAtl != 1 and cs_out.parkingBrake:
+    if cs_out.parkingBrake:
       events.add(EventName.parkBrake)
-    if self.dragonconf.dpAtl != 1 and cs_out.accFaulted:
+    if cs_out.accFaulted:
       events.add(EventName.accFaulted)
     if cs_out.steeringPressed:
       events.add(EventName.steerOverride)
@@ -302,9 +339,7 @@ class CarInterfaceBase(ABC):
         events.add(EventName.steerTempUnavailableSilent)
       else:
         events.add(EventName.steerTempUnavailable)
-
     else:
-      self.no_steer_warning = False
       self.silent_steer_warning = False
     if cs_out.steerFaultPermanent:
       events.add(EventName.steerUnavailable)
@@ -318,28 +353,6 @@ class CarInterfaceBase(ABC):
         events.add(EventName.pcmDisable)
 
     return events
-
-  def dp_atl_warning(self, ret, events):
-    if self.dragonconf.dpAtl > 0:
-      if self.dp_last_cruise_actual_enabled and not ret.cruiseActualEnabled:
-        events.add(EventName.communityFeatureDisallowedDEPRECATED)
-      elif ret.cruiseState.enabled != ret.cruiseActualEnabled:
-        events.add(EventName.gasPressedOverride)
-      self.dp_last_cruise_actual_enabled = ret.cruiseActualEnabled
-    return events
-  
-  def dp_atl_mode(self, ret):
-    enable = ret.cruiseState.enabled
-    available = ret.cruiseState.available
-    if self.dragonconf.dpAtl > 0 and available:
-      enable = True
-      if ret.gearShifter in [car.CarState.GearShifter.reverse, car.CarState.GearShifter.park]:
-        enable = False
-        available = False
-      if ret.seatbeltUnlatched or ret.doorOpen:
-        enable = False
-        available = False
-    return enable, available
 
 
 class RadarInterfaceBase(ABC):
