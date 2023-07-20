@@ -61,27 +61,27 @@ class CarInterface(CarInterfaceBase):
 
   # returns a car.CarState
   def _update(self, c):
-      ret = self.CS.update(self.cp, self.cp_cam, self.cp_body)
-      if self.CP.enableTorqueInterceptor and not TI.enabled:
-        TI.enabled = True
-        self.cp_body = self.CS.get_body_can_parser(self.CP)
-        self.can_parsers = [self.cp, self.cp_cam, self.cp_adas, self.cp_body, self.cp_loopback]
+    if self.CP.enableTorqueInterceptor and not TI.enabled:
+      TI.enabled = True
+      self.cp_body = self.CS.get_body_can_parser(self.CP)
+      self.can_parsers = [self.cp, self.cp_cam, self.cp_adas, self.cp_body, self.cp_loopback]
     
+    ret = self.CS.update(self.cp, self.cp_cam, self.cp_body)
 
     # events
-      events = self.create_common_events(ret)
+    events = self.create_common_events(ret)
 
-      if self.CS.lkas_disabled:
+    if self.CS.lkas_disabled:
         events.add(EventName.lkasDisabled)
-      elif self.dragonconf.dpMazdaSteerAlert and self.CS.low_speed_alert:
+    elif self.dragonconf.dpMazdaSteerAlert and self.CS.low_speed_alert:
         events.add(EventName.belowSteerSpeed)
       
-      if not self.CS.acc_active_last and not self.CS.ti_lkas_allowed:
+    if not self.CS.acc_active_last and not self.CS.ti_lkas_allowed:
         events.add(EventName.steerTempUnavailable)  
 
-      ret.events = events.to_msg()
+    ret.events = events.to_msg()
 
-      return ret
+    return ret
 
   def apply(self, c, now_nanos):
     return self.CC.update(c, self.CS, now_nanos)
