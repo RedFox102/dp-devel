@@ -90,8 +90,7 @@ class CarController:
     # dp - ti 
     #The ti cannot be detected unless OP sends a can message to it becasue the ti only transmits when it
     #sees the signature key in the designated address range.
-    if self.dp_mazda_ti:
-      can_sends.append(mazdacan.create_ti_steering_control(self.packer, self.CP.carFingerprint,
+    can_sends.append(mazdacan.create_ti_steering_control(self.packer, self.CP.carFingerprint,
                                                       self.frame, ti_apply_steer))
     # always send to the stock system
     can_sends.append(mazdacan.create_steering_control(self.packer, self.CP.carFingerprint,
