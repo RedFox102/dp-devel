@@ -1,8 +1,8 @@
 from cereal import car
 from opendbc.can.packer import CANPacker
-from selfdrive.car import apply_driver_steer_torque_limits
+from selfdrive.car import apply_driver_steer_torque_limits, apply_ti_steer_torque_limits
 from selfdrive.car.mazda import mazdacan
-from selfdrive.car.mazda.values import CarControllerParams, TiSteerLimits, Buttons
+from selfdrive.car.mazda.values import CarControllerParams, Buttons, GEN1
 from common.params import Params
 
 
@@ -17,6 +17,7 @@ class CarController:
     self.packer = CANPacker(dbc_name)
     self.brake_counter = 0
     self.frame = 0
+    self.params = CarControllerParams(CP)
 
   def update(self, CC, CS, now_nanos):
     can_sends = []
@@ -29,13 +30,13 @@ class CarController:
       # ti - calculate steer and also set limits due to driver torque
       if CS.CP.enableTorqueInterceptor:
         if CS.ti_lkas_allowed:
-          ti_new_steer = int(round(CC.actuators.steer * TiSteerLimits.STEER_MAX))
-          ti_apply_steer = apply_driver_steer_torque_limits(ti_new_steer, self.ti_apply_steer_last,
-                                                    CS.out.steeringTorque, TiSteerLimits)
+          ti_new_steer = int(round(CC.actuators.steer * self.params.TI_STEER_MAX))
+          ti_apply_steer = apply_ti_steer_torque_limits(ti_new_steer, self.ti_apply_steer_last,
+                                                    CS.out.steeringTorque, self.params)
       # LKAS - calculate steer and also set limits due to driver torque
       new_steer = int(round(CC.actuators.steer * CarControllerParams.STEER_MAX))
       apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last,
-                                                    CS.out.steeringTorque, CarControllerParams)
+                                                    CS.out.steeringTorque, self.params)
 
       self.steer_rate_limited = (new_steer != apply_steer) and (ti_new_steer != ti_apply_steer)
 
